@@ -264,6 +264,7 @@ enum
     UNIT_STATUS_PETRIFY = 11,
     UNIT_STATUS_12 = 12,
     UNIT_STATUS_13 = 13,
+    UNIT_STATUS_BREAK = 14,
 };
 
 enum {

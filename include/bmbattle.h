@@ -27,6 +27,7 @@ struct BattleUnit {
     /* 51 */ u8 weaponSlotIndex;
 
     /* 52 */ s8 canCounter;
+    s8 breakWeapon;
 
     /* 53 */ s8 wTriangleHitBonus;
     /* 54 */ s8 wTriangleDmgBonus;

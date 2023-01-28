@@ -26,26 +26,27 @@ struct WeaponTriangleRule {
     s8 defenderWeaponType;
     s8 hitBonus;
     s8 atkBonus;
+    s8 breakDefender;
 };
 
 static CONST_DATA struct WeaponTriangleRule sWeaponTriangleRules[] = {
-    { ITYPE_SWORD, ITYPE_LANCE, -15, -1 },
-    { ITYPE_SWORD, ITYPE_AXE,   +15, +1 },
+    { ITYPE_SWORD, ITYPE_LANCE, -15, -1, 0 },
+    { ITYPE_SWORD, ITYPE_AXE,   +15, +1, 1 },
 
-    { ITYPE_LANCE, ITYPE_AXE,   -15, -1 },
-    { ITYPE_LANCE, ITYPE_SWORD, +15, +1 },
+    { ITYPE_LANCE, ITYPE_AXE,   -15, -1, 0 },
+    { ITYPE_LANCE, ITYPE_SWORD, +15, +1, 1 },
 
-    { ITYPE_AXE,   ITYPE_SWORD, -15, -1 },
-    { ITYPE_AXE,   ITYPE_LANCE, +15, +1 },
+    { ITYPE_AXE,   ITYPE_SWORD, -15, -1, 0 },
+    { ITYPE_AXE,   ITYPE_LANCE, +15, +1, 1 },
 
-    { ITYPE_ANIMA, ITYPE_DARK,  -15, -1 },
-    { ITYPE_ANIMA, ITYPE_LIGHT, +15, +1 },
+    { ITYPE_ANIMA, ITYPE_DARK,  -15, -1, 0 },
+    { ITYPE_ANIMA, ITYPE_LIGHT, +15, +1, 1 },
 
-    { ITYPE_LIGHT, ITYPE_ANIMA, -15, -1 },
-    { ITYPE_LIGHT, ITYPE_DARK,  +15, +1 },
+    { ITYPE_LIGHT, ITYPE_ANIMA, -15, -1, 0 },
+    { ITYPE_LIGHT, ITYPE_DARK,  +15, +1, 1 },
 
-    { ITYPE_DARK,  ITYPE_LIGHT, -15, -1 },
-    { ITYPE_DARK,  ITYPE_ANIMA, +15, +1 },
+    { ITYPE_DARK,  ITYPE_LIGHT, -15, -1, 0 },
+    { ITYPE_DARK,  ITYPE_ANIMA, +15, +1, 1 },
 
     { -1 },
 };
@@ -1139,7 +1140,42 @@ void BattleGenerateHitTriangleAttack(struct BattleUnit* attacker, struct BattleU
 }
 
 void BattleGenerateHitEffects(struct BattleUnit* attacker, struct BattleUnit* defender) {
+    const struct WeaponTriangleRule* it;
+    s8 breakDefender;
     attacker->wexpMultiplier++;
+
+    if (!(gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS)) {
+        for (it = sWeaponTriangleRules; it->attackerWeaponType >= 0; ++it) {
+            if ((attacker->weaponType == it->attackerWeaponType) && (defender->weaponType == it->defenderWeaponType)) {
+                breakDefender = 1;
+                breakDefender &= it->breakDefender;
+
+                if (attacker->weaponAttributes & IA_REVERTTRIANGLE) 
+                {
+                    // Swap value if triangle is reverted.
+                    breakDefender ^= 1;
+                }
+                
+                if (defender->weaponAttributes & IA_REVERTTRIANGLE)
+                {
+                    // Swap value if triangle is reverted.
+                    breakDefender ^= 1;
+                }
+
+                if (breakDefender == 1)
+                {
+                    // defender->statusOut = UNIT_STATUS_13;
+                    // gBattleHitIterator->attributes |= BATTLE_HIT_ATTR_5; // Break the unit
+                    defender->breakWeapon = TRUE; // Break mechanic from engage, not to be confused with the weapon actually breaking
+                    defender->weaponBroke = TRUE;
+                    defender->weapon = 0;
+                    defender->canCounter = FALSE;
+                }
+
+                break;
+            }
+        }
+    }
 
     if (!(gBattleHitIterator->attributes & BATTLE_HIT_ATTR_MISS)) {
         if (defender->unit.pClassData->number != CLASS_DEMON_KING) {
@@ -1998,6 +2034,13 @@ void BattleInitTargetCanCounter(void) {
 
     // Target cannot counter if either units are using "uncounterable" weapons
 
+    if (gBattleTarget.breakWeapon == 1)
+    {
+        // TODO: Figure out how to reset this every turn
+        gBattleTarget.weapon = 0;
+        gBattleTarget.canCounter = FALSE;
+    }
+
     if ((gBattleActor.weaponAttributes | gBattleTarget.weaponAttributes) & IA_UNCOUNTERABLE) {
         gBattleTarget.weapon = 0;
         gBattleTarget.canCounter = FALSE;
@@ -2443,43 +2486,27 @@ void UnitLevelUp(struct Unit* unit) {
         lckGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthLck);
         totalGain += lckGain;
 
-        if (totalGain == 0) {
-            for (totalGain = 0; totalGain < 2; ++totalGain) {
-                hpGain = GetStatIncrease(unit->pCharacterData->growthHP);
+        while (totalGain == 0) {
+            hpGain  = GetStatIncrease(growthBonus + unit->pCharacterData->growthHP);
+            totalGain += hpGain;
 
-                if (hpGain)
-                    break;
+            powGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthPow);
+            totalGain += powGain;
 
-                powGain = GetStatIncrease(unit->pCharacterData->growthPow);
+            sklGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthSkl);
+            totalGain += sklGain;
 
-                if (powGain)
-                    break;
+            spdGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthSpd);
+            totalGain += spdGain;
 
-                sklGain = GetStatIncrease(unit->pCharacterData->growthSkl);
+            defGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthDef);
+            totalGain += defGain;
 
-                if (sklGain)
-                    break;
+            resGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthRes);
+            totalGain += resGain;
 
-                spdGain = GetStatIncrease(unit->pCharacterData->growthSpd);
-
-                if (spdGain)
-                    break;
-
-                defGain = GetStatIncrease(unit->pCharacterData->growthDef);
-
-                if (defGain)
-                    break;
-
-                resGain = GetStatIncrease(unit->pCharacterData->growthRes);
-
-                if (resGain)
-                    break;
-
-                lckGain = GetStatIncrease(unit->pCharacterData->growthLck);
-
-                if (lckGain)
-                    break;
-            }
+            lckGain = GetStatIncrease(growthBonus + unit->pCharacterData->growthLck);
+            totalGain += lckGain;
         }
 
         if ((unit->maxHP + hpGain) > UNIT_MHP_MAX(unit))
